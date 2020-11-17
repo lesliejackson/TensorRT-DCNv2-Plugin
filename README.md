@@ -19,3 +19,5 @@ make -j4
 ```
 4. 编译完成后会生成libnvinfer_plugin库
 5. 将builtin_op_importer.cpp拷贝到onnx-tensorrt中编译libnvonnxparser库
+
+DCNv2的实现代码摘自CaoWGG/TensorRT-CenterNet
