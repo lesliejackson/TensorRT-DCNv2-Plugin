@@ -2,8 +2,8 @@
 基于TensorRT7实现DCNv2插件
 
 ## prerequirements
-CUB-1.8.0
-TensorRT-7.0.0.11
+1. CUB-1.8.0
+2. TensorRT-7.0.0.11
 
 ## dependencies
 1. TensorRT 7.0
