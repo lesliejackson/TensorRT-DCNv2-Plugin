@@ -26,6 +26,8 @@ private:
     int _groups; // not use
     int _padding;
     int _stride;
+    int _output_height;
+    int _output_width;
     std::vector<float> _h_weight;
     std::vector<float> _h_bias;
     float* _d_weight;
@@ -33,7 +35,6 @@ private:
     float* _d_ones;
     float *_d_columns;
     cublasHandle_t _cublas_handle;
-    nvinfer1::Dims _input_dims;
     const char* _plugin_namespace;
 
     bool _initialized;
@@ -51,6 +52,8 @@ public:
         deserialize_value(&serialData, &serialLength, &_stride);
         deserialize_value(&serialData, &serialLength, &_h_weight);
         deserialize_value(&serialData, &serialLength, &_h_bias);
+        deserialize_value(&serialData, &serialLength, &_output_height);
+        deserialize_value(&serialData, &serialLength, &_output_width);
     }
     size_t getSerializationSize() const override {
         return (serialized_size(_in_channel) +
@@ -63,7 +66,9 @@ public:
                 serialized_size(_padding) +
                 serialized_size(_stride) +
                 serialized_size(_h_weight) +
-                serialized_size(_h_bias)
+                serialized_size(_h_bias) +
+                serialized_size(_output_height) +
+                serialized_size(_output_width)
                );
     }
     void serialize(void *buffer) const override {
@@ -78,6 +83,8 @@ public:
         serialize_value(&buffer, _stride);
         serialize_value(&buffer, _h_weight);
         serialize_value(&buffer, _h_bias);
+        serialize_value(&buffer, _output_height);
+        serialize_value(&buffer, _output_width);
     }
 
     DCNv2Plugin(int in_channel,
@@ -106,6 +113,7 @@ public:
 
     DCNv2Plugin(void const* serialData, size_t serialLength) : _initialized(false) {
         this->deserialize(serialData, serialLength);
+        cublasCreate(&_cublas_handle);
      }
 
     DCNv2Plugin() = delete;

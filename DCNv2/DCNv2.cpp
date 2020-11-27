@@ -17,26 +17,6 @@ using nvinfer1::plugin::DCNv2PluginCreator;
   } \
 } while(0)
 
-cublasHandle_t blas_handle()
-{
-    static int init[16] = {0};
-    static cublasHandle_t handle[16];
-    int n = 0;
-    cudaError_t status = cudaGetDevice(&n);
-    if(!init[n]) {
-        cublasCreate(&handle[n]);
-        init[n] = 1;
-    }
-    return handle[n];
-}
-
-inline bool is_CHW(nvinfer1::Dims const& dims) {
-    return (dims.nbDims == 3 &&
-            dims.type[0] == nvinfer1::DimensionType::kCHANNEL &&
-            dims.type[1] == nvinfer1::DimensionType::kSPATIAL &&
-            dims.type[2] == nvinfer1::DimensionType::kSPATIAL);
-}
-
 DCNv2Plugin::DCNv2Plugin(int in_channel,
                          int out_channel,
                          int kernel_H,
@@ -50,7 +30,6 @@ DCNv2Plugin::DCNv2Plugin(int in_channel,
                         _out_channel(out_channel),_kernel_H(kernel_H),_kernel_W(kernel_W),_deformable_group(deformable_group),
                          _dilation(dilation),_groups(groups),_padding(padding),_stride(stride),_initialized(false){
 
-    // std::cout << "**************************** call DCNv2 construct ******************************" <<std::endl;
     if (weight.type == nvinfer1::DataType::kFLOAT)
     {
         _h_weight.assign((float*)weight.values,(float*)weight.values+weight.count);
@@ -76,20 +55,14 @@ DCNv2Plugin::DCNv2Plugin(int in_channel,
                          const std::vector<float> &weight, const std::vector<float> &bias):_in_channel(in_channel),
                         _out_channel(out_channel),_kernel_H(kernel_H),_kernel_W(kernel_W),_deformable_group(deformable_group),
                          _dilation(dilation),_groups(groups),_padding(padding),_stride(stride),_initialized(false){
-
-    //std::cout << "**************************** call DCNv2 construct ******************************" <<std::endl;
-
     _h_weight.assign(weight.begin(), weight.end());
     _h_bias.assign(bias.begin(), bias.end());
     cublasCreate(&_cublas_handle);
 }
 
 int DCNv2Plugin::initialize() {
-    //std::cout << "**************************** call DCNv2 initialize ******************************" <<std::endl;
     if(_initialized) return 0;
-    auto output_h = (_input_dims.d[2] + 2 * _padding - (_dilation * (_kernel_H - 1) + 1)) / _stride + 1;
-    auto output_w = (_input_dims.d[3] + 2 * _padding - (_dilation * (_kernel_H - 1) + 1)) / _stride + 1;
-    size_t ones_size = output_h * output_w * sizeof(float);
+    size_t ones_size = _output_height * _output_width * sizeof(float);
     size_t weight_size = _h_weight.size()* sizeof(float);
     size_t bias_size = _h_bias.size()* sizeof(float);
     float *ones_cpu = new float[ones_size/ sizeof(float)];
@@ -109,7 +82,6 @@ int DCNv2Plugin::initialize() {
     return 0;
 }
 void DCNv2Plugin::terminate() {
-    //std::cout << "**************************** call DCNv2 terminate ******************************" <<std::endl;
     if (!_initialized) {
         return;
     }
@@ -122,22 +94,21 @@ void DCNv2Plugin::terminate() {
 }
 
 DCNv2Plugin::~DCNv2Plugin() {
-    //std::cout << "**************************** call DCNv2 deconstruct ******************************" <<std::endl;
     terminate();
 }
 
 
 void DCNv2Plugin::configurePlugin(const nvinfer1::DynamicPluginTensorDesc* in, int nbInputs, 
     const nvinfer1::DynamicPluginTensorDesc* out, int nbOutputs) {
-  //std::cout << "**************************** call DCNv2 configurePlugin ******************************" <<std::endl;
   assert(nbInputs == 3);
   assert(nbOutputs == 1);
   auto &input_desc = in[0].desc;
-  _input_dims = input_desc.dims;
+  auto input_dims = input_desc.dims;
+  _output_height = (input_dims.d[2] + 2 * _padding - (_dilation * (_kernel_H - 1) + 1)) / _stride + 1;
+  _output_width = (input_dims.d[3] + 2 * _padding - (_dilation * (_kernel_H - 1) + 1)) / _stride + 1;
 }
 
 bool DCNv2Plugin::supportsFormatCombination(int pos, const nvinfer1::PluginTensorDesc* inOut, int nbInputs, int nbOutputs) {
-  //std::cout << "**************************** call DCNv2 supportsFormatCombination ******************************" <<std::endl;
   assert(nbInputs == 3);
   assert(nbOutputs == 1);
   assert(pos < (nbInputs + nbOutputs));
@@ -149,21 +120,12 @@ nvinfer1::DimsExprs DCNv2Plugin::getOutputDimensions(int outputIndex,
                                                      int nbInputs,
                                                      nvinfer1::IExprBuilder& exprBuilder) {
   assert(outputIndex == 0);
-  //std::cout << "**************************** call DCNv2 getOutputDimensions ******************************" <<std::endl;
   assert(nbInputs == 3);
   nvinfer1::DimsExprs output(inputs[0]);
   auto input_h = output.d[2]->getConstantValue();
   auto input_w = output.d[3]->getConstantValue();
-  std::cout << _padding <<std::endl;
-  std::cout << _dilation <<std::endl;
-  std::cout << _kernel_H<<std::endl;
-  std::cout << _kernel_W<<std::endl;
-  std::cout << _stride <<std::endl;
   auto output_h = (input_h + 2 * _padding - (_dilation * (_kernel_H - 1) + 1)) / _stride + 1;
   auto output_w = (input_w + 2 * _padding - (_dilation * (_kernel_W - 1) + 1)) / _stride + 1;
-  std::cout << output_h <<std::endl;
-  std::cout << output_w <<std::endl;
-  std::cout << _out_channel <<std::endl;
   output.d[1] = exprBuilder.constant(_out_channel);
   output.d[2] = exprBuilder.constant(output_h);
   output.d[3] = exprBuilder.constant(output_w);
@@ -178,8 +140,6 @@ int DCNv2Plugin::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
                          const nvinfer1::PluginTensorDesc* outputDesc,
                          const void* const* inputs, void* const* outputs,
                          void* workspace,  cudaStream_t stream) {
-    std::cout << "**************************** call DCNv2 enqueue ******************************" <<std::endl;
-    std::cout << "batch dim: " << inputDesc[0].dims.d[0] << std::endl;
     float alpha ,beta;
     int m, n, k;
 
@@ -236,7 +196,6 @@ int DCNv2Plugin::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
 }
 
 void DCNv2Plugin::destroy() {
-    //std::cout << "**************************** call DCNv2 destroy******************************" <<std::endl;
   delete this;
 }
 
