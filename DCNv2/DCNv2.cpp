@@ -140,6 +140,7 @@ int DCNv2Plugin::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
                          const nvinfer1::PluginTensorDesc* outputDesc,
                          const void* const* inputs, void* const* outputs,
                          void* workspace,  cudaStream_t stream) {
+    if (!_initialized) initialize();
     float alpha ,beta;
     int m, n, k;
 
