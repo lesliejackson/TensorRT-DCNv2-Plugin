@@ -1,6 +1,9 @@
 # TensorRT7-DCNv2-Plugin
 基于TensorRT7实现DCNv2插件
 
+## update
+**2021-10-27 support Tensorrt8**
+
 ## prerequirements
 1. CUB-1.8.0
 2. TensorRT-7.0.0.11
