@@ -12,7 +12,7 @@ DCNv2 plugin implemented on TensorRT7
 1. TensorRT 7.0
 2. onnx-tensorrt 7.0
 
-1. clone TensorRT release/7.0版本
+1. clone TensorRT release/7.0
 2. put DCNv2 directory、InferPlugin.cpp and CMakeLists to TensorRT/plugin
 3. 
 ```
